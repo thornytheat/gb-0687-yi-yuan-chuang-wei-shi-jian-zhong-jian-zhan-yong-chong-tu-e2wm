@@ -23,6 +23,12 @@ docker compose config --quiet
 - M5 占床日历：按当地午夜切分占床，入口 `/m/5`、`GET/POST /api/m5`。
 - M6 病区对账：核对分段与日历分钟，入口 `/m/6`、`GET/POST /api/m6`。
 - M7 补传重算：标记迟到并复核补传，入口 `/m/7`、`GET/POST /api/m7`。
+- M8 身份接回：按急诊/住院编号对应关系接回人链、重建占床与双占，入口 `/m/8`、`GET/POST /api/m8`；对应关系登记 `GET/POST /api/identity/links`、撤销 `POST /api/identity/links/<id>/unlink`。
+
+## 双编号身份接回
+
+急诊与住院各发一套患者号，事件以可选 `scope` 列（ER/IP，缺省 IP）区分编号域。对应关系独立持久化、只增不删：重试同一对编号不新增；更正只把旧行置 `corrected` 并留 `replaces` 痕迹，原始事件与历史对应均不删除。
+M8 从 M2 全量事件独立按“住院人”重建：同床跨域入院补回两段空档，异床则闭区间接续，占床段记录依据的 `link_id`。录错对应会把两人并成一人、吞掉真实双占；更正或撤销后重跑即拆回原两条链，床位与时长还原。看板按床显示占用人、原始编号与占用依据。样例见 `sample_data/identity.csv`。
 
 ## 演示与复核
 
@@ -33,7 +39,7 @@ docker compose config --quiet
 
 ## 数据与目录
 
-`app/modules/` 按业务切分；`sample_data/` 为UTF-8 BOM、GB18030及干净/脏样例；`tests/` 含规则与端到端测试。SQLite保存运行与复核，命名卷records保留重启后的记录。若需从头开始，可先停止服务并在确认不再需要记录后删除该项目records卷。
+`app/modules/` 按业务切分；`sample_data/` 为UTF-8 BOM、GB18030及干净/脏样例，`identity.csv` 为带 ER/IP 编号域的身份接回样例；`tests/` 含规则与端到端测试。SQLite保存运行、复核与编号对应关系（identity_links），命名卷records保留重启后的记录。若需从头开始，可先停止服务并在确认不再需要记录后删除该项目records卷。
 
 ## 定义与边界
 

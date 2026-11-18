@@ -15,11 +15,17 @@
 | M5 占床日历 | 按当地午夜切分占床 | `/api/m5` | `app/modules/m5_calendar/rules.py` `app/modules/m5_calendar/service.py` | `tests/test_m5_calendar.py` |
 | M6 病区对账 | 核对分段与日历分钟 | `/api/m6` | `app/modules/m6_reconcile/rules.py` `app/modules/m6_reconcile/service.py` | `tests/test_m6_reconcile.py` |
 | M7 补传重算 | 标记迟到并复核补传 | `/api/m7` | `app/modules/m7_replay/rules.py` `app/modules/m7_replay/service.py` | `tests/test_m7_replay.py` |
+| M8 身份接回 | 按对应关系接回双编号人链并重建占床 | `/api/m8` `/api/identity/links` | `app/modules/m8_identity/rules.py` `app/modules/m8_identity/service.py` `app/identity.py` | `tests/test_m8_identity.py` `tests/test_m8_identity_http.py` |
 
 ## 陷阱登记
 
 | TRAP | 现象 | 朴素实现会怎样 | 本项目处理 | 处理位置 | 测试 |
 |---|---|---|---|---|---|
+| TRAP-31 | 急诊/住院双编号断链 | 同一人占床断成两截、空档误判可收治、时长少算 | 对应关系接回人链，同床补空档异床闭区间 | `app/modules/m8_identity/rules.py` | `tests/test_m8_identity.py::test_same_bed_splice_closes_gap_and_los` |
+| TRAP-32 | 对应关系录错并人 | 两个不同的人并成一个，双占被同人过滤吞掉 | 接回段保留link_id依据，更正/撤销后重算拆回两条链 | `app/identity.py` `app/modules/m8_identity/service.py` | `tests/test_m8_identity_http.py::test_wrong_then_corrected_link_restores_conflict` |
+| TRAP-33 | 重试对应关系 | 重复登记导致一人多条生效关联 | 同对编号幂等返回created=false，部分唯一索引兜底 | `app/identity.py` | `tests/test_m8_identity_http.py::test_idempotent_same_pair_not_duplicated` |
+| TRAP-34 | 更正即覆盖 | 旧对应被删除无法追溯，原始记录丢失 | 只增不删，旧行置corrected并以replaces留痕 | `app/identity.py` | `tests/test_m8_identity_http.py::test_er_unique_active_constraint` |
+| TRAP-35 | M3隔离断链出院 | 接回时已看不到出院事件，链仍断 | M8从M2全量快照m2_records独立重建，隔离单列不混入 | `app/modules/m2_mapping/service.py` `app/modules/m8_identity/service.py` | `tests/test_m8_identity.py::test_orphan_and_balance` |
 | TRAP-02 | BOM | 覆盖或重复计数 | 显式检查保留证据 | `app/modules/m1_receive/rules.py` | `tests/test_m1_receive.py::test_bom_header` |
 | TRAP-05 | 短行 | 覆盖或重复计数 | 显式检查保留证据 | `app/modules/m1_receive/rules.py` | `tests/test_m1_receive.py::test_real_bad_width` |
 | TRAP-08 | 患者号前导零 | 覆盖或重复计数 | 显式检查保留证据 | `app/modules/m1_receive/rules.py` | `tests/test_m1_receive.py::test_key_preserved` |

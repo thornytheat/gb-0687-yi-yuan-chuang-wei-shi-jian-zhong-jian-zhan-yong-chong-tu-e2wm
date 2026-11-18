@@ -16,6 +16,7 @@ def run(raw=None, params=None, stop=7, persist=True):
         ctx=mod.execute(ctx)
     ctx.pop("source",None);ctx.pop("raw",None)
     result=serial(ctx);result["manifest"]=make(raw,actual);result["elapsed_ms"]=round((perf_counter()-t)*1000,3)
+    result["source_text"]=raw.decode("utf-8-sig",errors="replace")  # 封存原始输入，供身份接回等后续阶段按相同输入补算
     result["version"]=1;result["review"]="待复核"
     if persist and stop==7: return store.save(result)
     return result

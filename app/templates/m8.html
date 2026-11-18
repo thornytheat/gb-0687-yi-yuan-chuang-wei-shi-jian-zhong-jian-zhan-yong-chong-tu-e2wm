@@ -1,0 +1,78 @@
+{% extends "base.html" %}{% block content %}
+<div class="schedule">
+  <section class="panel timeline">
+    <div class="panel__head"><h2>床位占用看板（按住院人接回）</h2><span>半开区间 · UTC · 标注依据</span></div>
+    {% for track in tracks %}
+    <div class="track"><code>{{track.bed}}</code><div class="track-line">
+      {% for bar in track.bars %}
+      <i style="left:{{bar.left}}%;width:{{bar.width}}%" class="{% if bar.open %}open{% endif %}"
+         title="{{bar.person}}｜原始号 {{bar.patient}}（{{bar.scope}}）｜{{bar.basis}}｜{{bar.start}} → {{bar.end}}">
+        {{bar.patient}}{% if bar.link_id %}<small>·{{bar.link_id}}</small>{% endif %}</i>
+      {% endfor %}
+    </div></div>
+    {% endfor %}
+  </section>
+  <section class="panel upload">
+    <div class="panel__head"><h2>编号对应关系</h2><span>只增不删 · 更正留痕</span></div>
+    <form id="link-form" data-run="{{result.manifest.run_id}}">
+      <label>急诊患者号 ER<input name="er_patient" required placeholder="如 E1001"></label>
+      <label>住院患者号 IP<input name="ip_patient" required placeholder="如 I2001"></label>
+      <label>备注（可选）<input name="note" placeholder="更正原因等"></label>
+      <button class="action fill">提交 / 更正对应</button>
+    </form>
+    <div class="watermark"><small>生效对应 {{result.identity_links|length}} 条 · 接回点 {{result.identity_splices|length}} 处</small>
+      <code>重试同一对编号不新增；某编号改指他人时旧行置 corrected 并保留</code></div>
+  </section>
+</div>
+<div class="schedule">
+  <section class="panel lower">
+    <div class="panel__head"><h2>床位占用依据明细</h2><span>{{result.identity_board|length}} 段</span></div>
+    {{rows(result.identity_board,['bed','person','patient','scope','start','end','open','basis'])}}
+  </section>
+  <section class="panel lower">
+    <div class="panel__head"><h2>接回点</h2><span>{{result.identity_splices|length}} 处</span></div>
+    {{rows(result.identity_splices,['bed','er_patient','ip_patient','at','link_id'])}}
+  </section>
+</div>
+<div class="schedule">
+  <section class="panel lower">
+    <div class="panel__head"><h2>住院人时长</h2><span>人链合计</span></div>
+    {{rows(result.identity_stays,['person','beds','los_minutes','link_id'])}}
+  </section>
+  <section class="panel lower">
+    <div class="panel__head"><h2>双占裁决（接回后）</h2><span class="warning">{{result.identity_conflicts|length}} 段</span></div>
+    {{rows(result.identity_conflicts,['bed','patient','start','end','minutes','state'])}}
+  </section>
+</div>
+<section class="panel lower">
+  <div class="panel__head"><h2>对应关系登记台账（含已更正）</h2><span id="link-count"></span><a class="action" href="/api/identity/evidence.csv">身份证据 CSV ↗</a></div>
+  <div class="scroll"><table id="link-table"><thead><tr><th>对应关系</th><th>急诊号</th><th>住院号</th><th>状态</th><th>替代</th><th>登记时刻 UTC</th><th>备注</th></tr></thead><tbody></tbody></table></div>
+</section>
+<section class="panel lower">
+  <div class="panel__head"><h2>病区对账（守恒 {{result.stages[7].metrics.守恒}}）</h2></div>
+  {{rows(result.identity_reconciliation,['ward','episode_minutes','calendar_minutes','delta','state'])}}
+</section>
+<section class="panel lower">
+  <div class="panel__head"><h2>身份重建隔离（独立于 M3-M7，原始行保留）</h2><span>{{result.identity_quarantine|length}} 行</span></div>
+  {{rows(result.identity_quarantine,['line','key','code','reason','detail'])}}
+</section>
+<script>
+const linkForm=document.querySelector('#link-form');const notice=document.querySelector('#notice');
+async function loadLinks(){
+  const r=await fetch('/api/identity/links');const d=await r.json();
+  const tb=document.querySelector('#link-table tbody');tb.innerHTML='';
+  for(const x of d.all){const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${x.link_id}</td><td>${x.er_patient}</td><td>${x.ip_patient}</td><td>${x.status==='active'?'生效':'已更正'}</td><td>${x.replaces||'—'}</td><td>${x.created.slice(0,19)}</td><td>${x.note||''}</td>`;
+    if(x.status!=='active')tr.style.opacity=.55;tb.appendChild(tr);}
+  document.querySelector('#link-count').textContent=d.all.length+' 行（生效 '+d.active.length+'）';
+}
+linkForm?.addEventListener('submit',async e=>{e.preventDefault();
+  const body={er_patient:linkForm.elements.er_patient.value.trim(),ip_patient:linkForm.elements.ip_patient.value.trim(),note:linkForm.elements.note.value,run_id:linkForm.dataset.run};
+  try{const r=await fetch('/api/identity/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json();if(!r.ok)throw Error(d.message);
+    notice.textContent=d.created?'已登记对应 '+d.link.link_id:'对应已存在，复用 '+d.link.link_id+'（未新增）';
+    linkForm.reset();loadLinks();setTimeout(()=>location.reload(),900);
+  }catch(err){notice.textContent=err.message;}});
+loadLinks();
+</script>
+{% endblock %}

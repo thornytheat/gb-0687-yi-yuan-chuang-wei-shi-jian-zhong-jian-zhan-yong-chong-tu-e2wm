@@ -13,5 +13,7 @@ def execute(ctx):
             good.append(item)
         except DomainError as exc:ctx['quarantine'].append(rejected(row,exc.code,exc.message))
     ctx['records']=good;ctx['observation_end']=end
+    ctx['m2_count']=len(good)
+    ctx['m2_records']=[dict(x) for x in good]
     ctx['stages'].append({'title':'病区归一','rows':good,'metrics':{'床位':8,'有效事件':len(good),'日期偏移 h':8}})
     return ctx
